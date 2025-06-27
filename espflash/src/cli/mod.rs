@@ -33,7 +33,7 @@ use self::{
     serial::get_serial_port_info,
 };
 use crate::{
-    connection::reset::{ResetAfterOperation, ResetBeforeOperation},
+    connection::reset::{ClassicReset, ResetAfterOperation, ResetBeforeOperation},
     elf::ElfFirmwareImage,
     error::{Error, MissingPartition, MissingPartitionTable},
     flasher::{
@@ -318,20 +318,20 @@ pub fn connect(
 
     // NOTE: since `get_serial_port_info` filters out all PCI Port and Bluetooth
     //       serial ports, we can just pretend these types don't exist here.
-    let port_info = match port_info.port_type {
-        SerialPortType::UsbPort(info) => info,
-        SerialPortType::PciPort | SerialPortType::Unknown => {
-            debug!("Matched `SerialPortType::PciPort or ::Unknown`");
-            UsbPortInfo {
-                vid: 0,
-                pid: 0,
-                serial_number: None,
-                manufacturer: None,
-                product: None,
-            }
-        }
-        _ => unreachable!(),
-    };
+    // let port_info = match port_info.port_type {
+    //     SerialPortType::UsbPort(info) => info,
+    //     SerialPortType::PciPort | SerialPortType::Unknown => {
+    //         debug!("Matched `SerialPortType::PciPort or ::Unknown`");
+    //         UsbPortInfo {
+    //             vid: 0,
+    //             pid: 0,
+    //             serial_number: None,
+    //             manufacturer: None,
+    //             product: None,
+    //         }
+    //     }
+    //     _ => unreachable!(),
+    // };
 
     Ok(Flasher::connect(
         *Box::new(serial_port),
@@ -343,6 +343,7 @@ pub fn connect(
         args.chip,
         args.after,
         args.before,
+        Box::new(ClassicReset::new(false))
     )?)
 }
 

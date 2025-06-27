@@ -17,7 +17,7 @@ use log::{debug, info, warn};
 use md5::{Digest, Md5};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "serialport")]
-use serialport::UsbPortInfo;
+use serialport::SerialPortInfo;
 use strum::IntoEnumIterator;
 use strum::{Display, EnumIter, VariantNames};
 
@@ -30,7 +30,7 @@ use crate::{
 use crate::{
     command::{Command, CommandType},
     connection::{
-        reset::{ResetAfterOperation, ResetBeforeOperation},
+        reset::{ResetAfterOperation, ResetBeforeOperation, ResetStrategy},
         Connection, Port,
     },
     elf::{ElfFirmwareImage, FirmwareImage, RomSegment},
@@ -570,7 +570,7 @@ impl Flasher {
     #[allow(clippy::too_many_arguments)]
     pub fn connect(
         serial: Port,
-        port_info: UsbPortInfo,
+        port_info: SerialPortInfo,
         speed: Option<u32>,
         use_stub: bool,
         verify: bool,
@@ -578,10 +578,11 @@ impl Flasher {
         chip: Option<Chip>,
         after_operation: ResetAfterOperation,
         before_operation: ResetBeforeOperation,
+        reset_strategy: Box<dyn ResetStrategy>,
     ) -> Result<Self, Error> {
         // Establish a connection to the device using the default baud rate of 115,200
         // and timeout of 3 seconds.
-        let mut connection = Connection::new(serial, port_info, after_operation, before_operation);
+        let mut connection = Connection::new(serial, port_info, after_operation, before_operation, reset_strategy);
         connection.begin()?;
         connection.set_timeout(DEFAULT_TIMEOUT)?;
 
