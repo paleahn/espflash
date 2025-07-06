@@ -423,20 +423,20 @@ pub fn connect(
 
     // NOTE: since `serial_port_info` filters out all PCI Port and Bluetooth
     //       serial ports, we can just pretend these types don't exist here.
-    let port_info = match port_info.port_type {
-        SerialPortType::UsbPort(info) => info,
-        SerialPortType::PciPort | SerialPortType::Unknown => {
-            debug!("Matched `SerialPortType::PciPort or ::Unknown`");
-            UsbPortInfo {
-                vid: 0,
-                pid: 0,
-                serial_number: None,
-                manufacturer: None,
-                product: None,
-            }
-        }
-        _ => unreachable!(),
-    };
+    // let port_info = match port_info.port_type {
+    //     SerialPortType::UsbPort(info) => info,
+    //     SerialPortType::PciPort | SerialPortType::Unknown => {
+    //         debug!("Matched `SerialPortType::PciPort or ::Unknown`");
+    //         UsbPortInfo {
+    //             vid: 0,
+    //             pid: 0,
+    //             serial_number: None,
+    //             manufacturer: None,
+    //             product: None,
+    //         }
+    //     }
+    //     _ => unreachable!(),
+    // };
 
     let connection = Connection::new(
         *Box::new(serial_port),
@@ -446,6 +446,7 @@ pub fn connect(
         args.baud
             .or(config.project_config.baudrate)
             .unwrap_or(115_200),
+        Box::new(crate::connection::reset::ClassicReset::new(false))
     );
     Ok(Flasher::connect(
         connection,

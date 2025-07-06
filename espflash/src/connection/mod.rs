@@ -13,7 +13,7 @@ use std::{
 
 use log::{debug, info};
 use regex::Regex;
-use serialport::{SerialPort, UsbPortInfo};
+use serialport::{SerialPort, SerialPortInfo};
 use slip_codec::SlipDecoder;
 
 #[cfg(unix)]
@@ -37,7 +37,7 @@ use crate::{
     target::Chip,
 };
 
-pub(crate) mod reset;
+pub mod reset;
 
 pub use reset::{ResetAfterOperation, ResetBeforeOperation};
 
@@ -53,25 +53,27 @@ pub type Port = serialport::TTYPort;
 pub type Port = serialport::COMPort;
 
 /// An established connection with a target device.
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct Connection {
     serial: Port,
-    port_info: UsbPortInfo,
+    port_info: SerialPortInfo,
     decoder: SlipDecoder,
     after_operation: ResetAfterOperation,
     before_operation: ResetBeforeOperation,
     pub(crate) secure_download_mode: bool,
     pub(crate) baud: u32,
+    reset_strategy: Box<dyn ResetStrategy>,
 }
 
 impl Connection {
     /// Creates a new connection with a target device.
     pub fn new(
         serial: Port,
-        port_info: UsbPortInfo,
+        port_info: SerialPortInfo,
         after_operation: ResetAfterOperation,
         before_operation: ResetBeforeOperation,
         baud: u32,
+        reset_strategy: Box<dyn ResetStrategy>,
     ) -> Self {
         Connection {
             serial,
@@ -81,25 +83,37 @@ impl Connection {
             before_operation,
             secure_download_mode: false,
             baud,
+            reset_strategy
         }
     }
 
     /// Initializes a connection with a device.
     pub fn begin(&mut self) -> Result<(), Error> {
-        let port_name = self.serial.name().unwrap_or_default();
-        let reset_sequence = construct_reset_strategy_sequence(
-            &port_name,
-            self.port_info.pid,
-            self.before_operation,
-        );
+        // let port_name = self.serial.name().unwrap_or_default();
+        // let reset_sequence = construct_reset_strategy_sequence(
+        //     &port_name,
+        //     self.port_info.pid,
+        //     self.before_operation,
+        // );
 
-        for (_, reset_strategy) in zip(0..MAX_CONNECT_ATTEMPTS, reset_sequence.iter().cycle()) {
-            match self.connect_attempt(reset_strategy.as_ref()) {
+        // for (_, reset_strategy) in zip(0..MAX_CONNECT_ATTEMPTS, reset_sequence.iter().cycle()) {
+        //     match self.connect_attempt(reset_strategy.as_ref()) {
+        //         Ok(_) => {
+        //             return Ok(());
+        //         }
+        //         Err(e) => {
+        //             debug!("Failed to reset, error {e:#?}, retrying");
+        //         }
+        //     }
+        // }
+
+        for _ in 0..MAX_CONNECT_ATTEMPTS {
+            match self.connect_attempt() {
                 Ok(_) => {
                     return Ok(());
                 }
                 Err(e) => {
-                    debug!("Failed to reset, error {e:#?}, retrying");
+                    debug!("Failed to reset, error {:#?}, retrying", e);
                 }
             }
         }
@@ -110,7 +124,7 @@ impl Connection {
     }
 
     /// Connects to a device.
-    fn connect_attempt(&mut self, reset_strategy: &dyn ResetStrategy) -> Result<(), Error> {
+    fn connect_attempt(&mut self) -> Result<(), Error> {
         // If we're doing no_sync, we're likely communicating as a pass through
         // with an intermediate device to the ESP32
         if self.before_operation == ResetBeforeOperation::NoResetNoSync {
@@ -122,7 +136,7 @@ impl Connection {
         let mut buff: Vec<u8>;
         if self.before_operation != ResetBeforeOperation::NoReset {
             // Reset the chip to bootloader (download mode)
-            reset_strategy.reset(&mut self.serial)?;
+            self.reset_strategy.reset(&mut self.serial)?;
 
             // S2 in USB download mode responds with 0 available bytes here
             let available_bytes = self.serial.bytes_to_read()?;
@@ -223,7 +237,8 @@ impl Connection {
 
     /// Resets the device.
     pub fn reset(&mut self) -> Result<(), Error> {
-        reset_after_flash(&mut self.serial, self.port_info.pid)?;
+        // reset_after_flash(&mut self.serial, self.port_info.pid)?;
+        self.reset_strategy.reset(&mut self.serial)?;
 
         Ok(())
     }
@@ -233,7 +248,7 @@ impl Connection {
         let pid = self.usb_pid();
 
         match self.after_operation {
-            ResetAfterOperation::HardReset => hard_reset(&mut self.serial, pid),
+            ResetAfterOperation::HardReset => self.reset_strategy.reset(&mut self.serial),// hard_reset(&mut self.serial, pid),
             ResetAfterOperation::NoReset => {
                 info!("Staying in bootloader");
                 soft_reset(self, true, is_stub)?;
@@ -293,19 +308,21 @@ impl Connection {
 
     /// Resets the device to flash mode.
     pub fn reset_to_flash(&mut self, extra_delay: bool) -> Result<(), Error> {
-        if self.is_using_usb_serial_jtag() {
-            UsbJtagSerialReset.reset(&mut self.serial)
-        } else {
-            #[cfg(unix)]
-            if UnixTightReset::new(extra_delay)
-                .reset(&mut self.serial)
-                .is_ok()
-            {
-                return Ok(());
-            }
+        // if self.is_using_usb_serial_jtag() {
+        //     UsbJtagSerialReset.reset(&mut self.serial)
+        // } else {
+        //     #[cfg(unix)]
+        //     if UnixTightReset::new(extra_delay)
+        //         .reset(&mut self.serial)
+        //         .is_ok()
+        //     {
+        //         return Ok(());
+        //     }
 
-            ClassicReset::new(extra_delay).reset(&mut self.serial)
-        }
+        //     ClassicReset::new(extra_delay).reset(&mut self.serial)
+        // }
+
+        self.reset_strategy.reset(&mut self.serial)
     }
 
     /// Sets the timeout for the serial port.
@@ -541,12 +558,12 @@ impl Connection {
 
     /// Returns the USB PID of the serial port.
     pub fn usb_pid(&self) -> u16 {
-        self.port_info.pid
+        USB_SERIAL_JTAG_PID// self.port_info.pid
     }
 
     /// Returns if the connection is using USB serial JTAG.
     pub(crate) fn is_using_usb_serial_jtag(&self) -> bool {
-        self.port_info.pid == USB_SERIAL_JTAG_PID
+        true// self.port_info.pid == USB_SERIAL_JTAG_PID
     }
 
     /// Returns the reset after operation.

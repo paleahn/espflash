@@ -626,7 +626,7 @@ pub struct DeviceInfo {
 
 /// Connect to and flash a target device
 #[cfg(feature = "serialport")]
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct Flasher {
     /// Connection for flash operations
     connection: Connection,
