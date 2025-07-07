@@ -32,6 +32,11 @@ const EXTRA_RESET_DELAY: u64 = 500; // ms
 pub trait ResetStrategy {
     fn reset(&self, serial_port: &mut Port) -> Result<(), Error>;
 
+    fn reset_hard(&self, _serial_port: &mut Port) -> Result<(), Error> {
+        // todo: 
+        Ok(())
+    }
+
     fn set_dtr(&self, serial_port: &mut Port, level: bool) -> Result<(), Error> {
         serial_port.write_data_terminal_ready(level)?;
 

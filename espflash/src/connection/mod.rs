@@ -238,7 +238,7 @@ impl Connection {
     /// Resets the device.
     pub fn reset(&mut self) -> Result<(), Error> {
         // reset_after_flash(&mut self.serial, self.port_info.pid)?;
-        self.reset_strategy.reset(&mut self.serial)?;
+        self.reset_strategy.reset_hard(&mut self.serial)?;
 
         Ok(())
     }
@@ -248,7 +248,7 @@ impl Connection {
         let pid = self.usb_pid();
 
         match self.after_operation {
-            ResetAfterOperation::HardReset => self.reset_strategy.reset(&mut self.serial),// hard_reset(&mut self.serial, pid),
+            ResetAfterOperation::HardReset => self.reset_strategy.reset_hard(&mut self.serial),// hard_reset(&mut self.serial, pid),
             ResetAfterOperation::NoReset => {
                 info!("Staying in bootloader");
                 soft_reset(self, true, is_stub)?;
